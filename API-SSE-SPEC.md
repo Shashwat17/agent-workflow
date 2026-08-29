@@ -31,6 +31,32 @@ All JSON APIs should return `Content-Type: application/json`. The event stream s
 }
 ```
 
+### Start and End boundary nodes
+
+Every executable workflow must contain exactly one Start node and one End node. Boundary nodes define graph entry and exit but are not agents and do not invoke a model.
+
+```json
+{
+  "id": "workflow-start-1724930800000",
+  "type": "boundaryNode",
+  "data": {
+    "nodeKind": "start",
+    "label": "Start"
+  }
+}
+```
+
+```json
+{
+  "id": "workflow-end-1724931100000",
+  "type": "boundaryNode",
+  "data": {
+    "nodeKind": "end",
+    "label": "End"
+  }
+}
+```
+
 ### Workflow edge
 
 ```json
@@ -202,6 +228,11 @@ Validation rules should include:
 - Circular dependencies should be rejected.
 - Disconnected nodes should produce a warning or error based on product policy.
 - Uploaded skill references must belong to the current user or workspace.
+- Exactly one Start and one End node are required.
+- Start cannot have incoming edges.
+- End cannot have outgoing edges.
+- Every agent must be reachable from Start and must be able to reach End.
+- Only agent nodes appear in `executionOrder`; boundary nodes only mark lifecycle boundaries.
 
 ## 3.3 Start a workflow run
 
@@ -214,6 +245,7 @@ Request:
 ```json
 {
   "clientRunId": "client-run-1724931000000",
+  "startNodeId": null,
   "nodes": [
     {
       "id": "business-analyst-1",

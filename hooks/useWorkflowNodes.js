@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { addEdge, useEdgesState, useNodesState } from "@xyflow/react";
-import { agentTemplates } from "@/lib/workflow-data";
+import { agentTemplates, boundaryTemplates } from "@/lib/workflow-data";
 
 export function useWorkflowNodes(isWorkflowRunning) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -27,7 +27,9 @@ export function useWorkflowNodes(isWorkflowRunning) {
       }
 
       const type = event.dataTransfer.getData("application/reactflow");
-      const template = agentTemplates.find((item) => item.id === type);
+      const template = [...boundaryTemplates, ...agentTemplates].find(
+        (item) => item.id === type,
+      );
 
       if (!template) {
         return;
@@ -45,13 +47,15 @@ export function useWorkflowNodes(isWorkflowRunning) {
 
       const newNode = {
         id: `${template.id}-${Date.now()}`,
-        type: "agentNode",
+        type: template.nodeKind ? "boundaryNode" : "agentNode",
         position,
         data: {
           label: template.name,
+          nodeKind: template.nodeKind || "agent",
+          agentType: template.nodeKind ? null : template.id,
           description: template.description,
-          prompt: template.defaultPrompt,
-          output: template.output,
+          prompt: template.defaultPrompt || "",
+          output: template.output || "",
           status: isWorkflowRunning ? "Running" : "Idle",
           phaseIndex: 0,
           totalPhases: template.phases?.length ?? 0,
@@ -62,7 +66,7 @@ export function useWorkflowNodes(isWorkflowRunning) {
       };
 
       setNodes((current) => current.concat(newNode));
-      setSelectedNodeId(newNode.id);
+      setSelectedNodeId(template.nodeKind ? null : newNode.id);
     },
     [nodes, isWorkflowRunning, getAutoPosition, setNodes],
   );
@@ -70,6 +74,18 @@ export function useWorkflowNodes(isWorkflowRunning) {
   const handleConnect = useCallback(
     (params) => {
       if (isWorkflowRunning || !params.source || !params.target) {
+        return;
+      }
+
+      const sourceNode = nodes.find((node) => node.id === params.source);
+      const targetNode = nodes.find((node) => node.id === params.target);
+      const invalidBoundary =
+        sourceNode?.data?.nodeKind === "end" ||
+        targetNode?.data?.nodeKind === "start";
+      const duplicate = edges.some(
+        (edge) => edge.source === params.source && edge.target === params.target,
+      );
+      if (invalidBoundary || duplicate || params.source === params.target) {
         return;
       }
 
@@ -93,7 +109,7 @@ export function useWorkflowNodes(isWorkflowRunning) {
         ),
       );
     },
-    [isWorkflowRunning, setEdges],
+    [edges, isWorkflowRunning, nodes, setEdges],
   );
 
   const updateSelectedNodeField = useCallback(

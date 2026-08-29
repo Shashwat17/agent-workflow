@@ -9,10 +9,12 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { AgentNode } from "@/components/workflow/agent-node";
+import { BoundaryNode } from "@/components/workflow/boundary-node";
 import { ProcessingEdge } from "@/components/workflow/processing-edge";
 
 const nodeTypes = {
   agentNode: AgentNode,
+  boundaryNode: BoundaryNode,
 };
 
 const edgeTypes = {

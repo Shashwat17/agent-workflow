@@ -42,12 +42,13 @@ export function useWorkflowExecution(nodes, edges, integrations, setNodes, isWor
     if (!nodes.length || executionLockRef.current) return;
     executionLockRef.current = true;
     dispatch(runRequested());
-    const runNodes = nodes.slice(startIndex);
+    const runNodes = nodes;
     try {
       const validation = await validateWorkflowRequest({ nodes: runNodes, edges }).unwrap();
       if (!validation.valid) throw new Error(validation.issues?.[0]?.message || "Workflow validation failed.");
       const run = await startRunRequest({
         clientRunId: `client-run-${Date.now()}`,
+        startNodeId: startIndex > 0 ? nodes[startIndex]?.id : null,
         nodes: runNodes,
         edges,
         integrations: integrations.map((item) => item.id),
@@ -100,7 +101,8 @@ export function useWorkflowExecution(nodes, edges, integrations, setNodes, isWor
     dispatch(eventReceived(event));
     const nodeIndex = event.nodeId ? nodesRef.current.findIndex((node) => node.id === event.nodeId) : -1;
     if (event.type === "node.started" && nodeIndex >= 0) {
-      setSelectedNodeId(event.nodeId);
+      const nodeKind = nodesRef.current[nodeIndex]?.data?.nodeKind;
+      if (!["start", "end"].includes(nodeKind)) setSelectedNodeId(event.nodeId);
       setNodes((current) => current.map((node) => node.id === event.nodeId ? { ...node, data: { ...node.data, status: "Running", startedAt: event.startedAt } } : node));
     }
     if (event.type === "node.queued" && nodeIndex >= 0) {

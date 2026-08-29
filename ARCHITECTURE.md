@@ -56,6 +56,14 @@ hooks/
 
 React Flow nodes currently receive a projection of execution state so existing UI behavior remains unchanged. Future canvas components should read execution metadata through selectors rather than expanding `node.data` further.
 
+## Workflow graph contract
+
+- Every workflow contains exactly one Start boundary and one End boundary.
+- Boundary nodes are draggable canvas elements but never execute agent logic.
+- All agents must exist on a directed path from Start to End.
+- Execution order is calculated with a topological sort of the edge graph, not array or drop order.
+- Cycles, isolated agents, duplicate edges and invalid boundary directions are rejected before execution.
+
 ## Backend switching
 
 Mock mode and live mode use the same RTK Query hooks and runtime schemas. Only environment configuration changes:

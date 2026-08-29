@@ -134,7 +134,23 @@ export default function Home() {
                 </div>
               </div>
               <div className="h-[calc(100vh-260px)]">
-                <WorkflowCanvas nodes={nodes} edges={workflowEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={handleConnect} onNodeClick={(_, node) => setSelectedNodeId(node.id)} onDrop={handleDrop} onDragOver={() => {}} isWorkflowRunning={isWorkflowRunning} />
+                <WorkflowCanvas
+                  nodes={nodes}
+                  edges={workflowEdges}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  onConnect={handleConnect}
+                  onNodeClick={(_, node) =>
+                    setSelectedNodeId(
+                      ["start", "end"].includes(node.data?.nodeKind)
+                        ? null
+                        : node.id,
+                    )
+                  }
+                  onDrop={handleDrop}
+                  onDragOver={() => {}}
+                  isWorkflowRunning={isWorkflowRunning}
+                />
               </div>
             </section>
 

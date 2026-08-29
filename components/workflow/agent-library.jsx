@@ -1,4 +1,4 @@
-import { agentTemplates } from "@/lib/workflow-data";
+import { agentTemplates, boundaryTemplates } from "@/lib/workflow-data";
 
 export function AgentLibrary({ isWorkflowRunning = false }) {
   return (
@@ -13,6 +13,34 @@ export function AgentLibrary({ isWorkflowRunning = false }) {
       </div>
 
       <div className="space-y-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+          Workflow nodes
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {boundaryTemplates.map((node) => (
+            <div
+              key={node.id}
+              draggable={!isWorkflowRunning}
+              aria-disabled={isWorkflowRunning}
+              onDragStart={(event) => {
+                if (isWorkflowRunning) {
+                  event.preventDefault();
+                  return;
+                }
+                event.dataTransfer.setData("application/reactflow", node.id);
+                event.dataTransfer.effectAllowed = "move";
+              }}
+              className={`rounded-xl border p-3 transition ${isWorkflowRunning ? "cursor-not-allowed opacity-55" : "cursor-grab hover:-translate-y-0.5 hover:shadow-sm active:cursor-grabbing"}`}
+              style={{ borderColor: node.border, background: node.tint }}
+            >
+              <span className="mb-2 block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: node.accent }} />
+              <span className="text-sm font-semibold text-slate-800">{node.name}</span>
+            </div>
+          ))}
+        </div>
+        <p className="pt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+          Agents
+        </p>
         {agentTemplates.map((agent) => (
           <div
             key={agent.id}
