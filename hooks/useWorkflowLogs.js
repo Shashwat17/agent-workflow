@@ -4,23 +4,23 @@ export function useWorkflowLogs() {
   const [liveLogsByNode, setLiveLogsByNode] = useState({});
   const [selectedLogFilter, setSelectedLogFilter] = useState("ALL");
 
-  const appendNodeLog = useCallback((nodeId, message) => {
+  const appendNodeLog = useCallback((nodeId, message, suppliedLevel, suppliedTimestamp) => {
     if (!nodeId || !message) {
       return;
     }
 
-    const level = /error|failed|issue|warning|warn/i.test(message)
+    const level = suppliedLevel || (/error|failed|issue|warning|warn/i.test(message)
       ? "ERROR"
       : /warn|warning/i.test(message)
         ? "WARN"
         : /start|connected|completed|success|produced|processed/i.test(message)
           ? "INFO"
-          : "EVENT";
+          : "EVENT");
 
     const nextEntry = {
       id: `${nodeId}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
       level,
-      time: new Date().toLocaleTimeString([], {
+      time: new Date(suppliedTimestamp || Date.now()).toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",

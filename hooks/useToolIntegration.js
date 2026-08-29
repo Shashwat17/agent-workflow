@@ -1,58 +1,23 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import {
+  useGetConnectionsQuery,
+  useRemoveConnectionMutation,
+  useSaveConnectionMutation,
+} from "@/lib/store/api-slice";
 
-export function useToolIntegration() {
-  const [connectedTools, setConnectedTools] = useState([
-    {
-      id: "jira",
-      label: "Jira",
-      shortLabel: "JIRA",
-      status: "Connected",
-      workspace: "Workflow Ops",
-      url: "https://company.atlassian.net",
-      email: "ops@company.com",
-      project: "OPS",
-    },
-    {
-      id: "azure",
-      label: "Azure DevOps",
-      shortLabel: "AZURE",
-      status: "Connected",
-      workspace: "contoso",
-      url: "https://dev.azure.com/contoso",
-      project: "Platform",
-    },
-  ]);
+export function useToolIntegration(onError) {
+  const { data, error } = useGetConnectionsQuery();
+  const [saveConnection] = useSaveConnectionMutation();
+  const [removeConnection] = useRemoveConnectionMutation();
+  const connectedTools = useMemo(() => data?.connections || [], [data?.connections]);
 
-  const saveTool = useCallback((tool) => {
-    setConnectedTools((current) => {
-      const isExisting = current.some((item) => item.id === tool.id);
+  useEffect(() => {
+    if (error) onError?.(error.message || "Could not load integrations.");
+  }, [error, onError]);
 
-      if (isExisting) {
-        return current.map((item) => (item.id === tool.id ? tool : item));
-      }
+  const saveTool = useCallback((tool) => saveConnection(tool).unwrap(), [saveConnection]);
+  const removeTool = useCallback((toolId) => removeConnection(toolId).unwrap(), [removeConnection]);
+  const getTool = useCallback((toolId) => connectedTools.find((tool) => tool.id === toolId), [connectedTools]);
 
-      return [...current, tool];
-    });
-  }, []);
-
-  const removeTool = useCallback((toolId) => {
-    setConnectedTools((current) =>
-      current.filter((tool) => tool.id !== toolId),
-    );
-  }, []);
-
-  const getTool = useCallback(
-    (toolId) => {
-      return connectedTools.find((tool) => tool.id === toolId);
-    },
-    [connectedTools],
-  );
-
-  return {
-    connectedTools,
-    setConnectedTools,
-    saveTool,
-    removeTool,
-    getTool,
-  };
+  return { connectedTools, saveTool, removeTool, getTool };
 }

@@ -139,7 +139,7 @@ export function WorkflowToolIntegrationModal({
     return null;
   }
 
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
     const normalized = {
       id: selectedCatalog.id,
       label: selectedCatalog.label,
@@ -148,8 +148,12 @@ export function WorkflowToolIntegrationModal({
       ...data,
     };
 
-    onSaveTool?.(normalized);
-    onOpenChange?.(false);
+    try {
+      await onSaveTool?.(normalized);
+      onOpenChange?.(false);
+    } catch {
+      form.setError("root", { message: "Connection failed. Check the API configuration and try again." });
+    }
   };
 
   return (
@@ -284,6 +288,9 @@ export function WorkflowToolIntegrationModal({
               </div>
 
               <div className="mt-auto flex items-center justify-between gap-3 border-t border-slate-200 pt-5">
+                {form.formState.errors.root?.message && (
+                  <p className="text-xs text-rose-600">{form.formState.errors.root.message}</p>
+                )}
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
                   Secure token-based connection

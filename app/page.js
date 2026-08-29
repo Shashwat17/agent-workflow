@@ -6,9 +6,9 @@ import { WorkflowCanvas } from "@/components/workflow/workflow-canvas";
 import { WorkflowDetailsPanel } from "@/components/workflow/workflow-details-panel";
 import { WorkflowHeader } from "@/components/workflow/workflow-header";
 import { validateWorkflow } from "@/lib/workflow-validation";
+import { useUploadFileMutation } from "@/lib/store/api-slice";
 import {
   useKeyboardShortcuts,
-  usePhaseEmitter,
   useToolIntegration,
   useWorkflowExecution,
   useWorkflowHistory,
@@ -22,26 +22,22 @@ export default function Home() {
   const [isWorkflowRunning, setIsWorkflowRunning] = useState(false);
   const [notice, setNotice] = useState("");
   const fileInputRef = useRef(null);
+  const [uploadFile] = useUploadFileMutation();
 
   const { nodes, setNodes, onNodesChange, edges, setEdges, onEdgesChange, hasNodes, handleDrop: hookHandleDrop, handleConnect: hookHandleConnect, updateSelectedNodeField, deleteNode, workflowEdges } = useWorkflowNodes(isWorkflowRunning);
   const { liveLogsByNode, appendNodeLog, clearNodeLogs, selectedLogFilter, setSelectedLogFilter } = useWorkflowLogs();
-  const { connectedTools, saveTool } = useToolIntegration();
+  const { connectedTools, saveTool } = useToolIntegration(setNotice);
   const { history, pushHistory, popHistory } = useWorkflowHistory();
 
   const {
-    executionIndex,
-    setNodePhaseProgress,
     handleWorkflowToggle: hookHandleWorkflowToggle,
     retryNode,
-  } = useWorkflowExecution(nodes, setNodes, isWorkflowRunning, setIsWorkflowRunning, setSelectedNodeId, appendNodeLog);
+  } = useWorkflowExecution(nodes, edges, connectedTools, setNodes, isWorkflowRunning, setIsWorkflowRunning, setSelectedNodeId, appendNodeLog, setNotice);
 
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
-  const activeNode = executionIndex >= 0 ? nodes[executionIndex] : null;
   const validationIssues = useMemo(() => validateWorkflow(nodes, edges), [edges, nodes]);
   const blockingIssues = validationIssues.filter((issue) => issue.type === "error");
   const executionSummary = useMemo(() => nodes.findLast((node) => node.data?.status === "Completed")?.data?.output || selectedNode?.data?.output || "", [nodes, selectedNode]);
-
-  usePhaseEmitter(isWorkflowRunning, activeNode?.id, activeNode?.data?.label, appendNodeLog, setNodePhaseProgress);
 
   const handleUndo = useCallback(() => {
     if (isWorkflowRunning || !history.length) return;
@@ -81,6 +77,28 @@ export default function Home() {
     hookHandleWorkflowToggle(nextState, hasNodes, startIndex);
   }, [blockingIssues, hasNodes, hookHandleWorkflowToggle]);
 
+  const handleSaveTool = useCallback(async (tool) => {
+    try {
+      await saveTool(tool);
+      setNotice(`${tool.label} connected successfully.`);
+    } catch (error) {
+      setNotice(error?.message || "Could not connect tool.");
+      throw error;
+    }
+  }, [saveTool]);
+
+  const handleFileUpload = useCallback(async (event) => {
+    const files = Array.from(event.target.files || []);
+    try {
+      const uploaded = await Promise.all(files.map((file) => uploadFile({ file, nodeId: selectedNodeId }).unwrap()));
+      setUploadedFiles(uploaded);
+      updateSelectedNodeField(selectedNodeId, "skills", uploaded.map((file) => file.fileId));
+      setNotice(uploaded.length ? `${uploaded.length} skill file${uploaded.length === 1 ? "" : "s"} uploaded.` : "");
+    } catch (error) {
+      setNotice(error?.message || "Could not upload skill file.");
+    }
+  }, [selectedNodeId, updateSelectedNodeField, uploadFile]);
+
   return (
     <main className="h-screen overflow-hidden bg-slate-50 text-slate-900">
       <div className="mx-auto flex h-full max-w-[1800px] flex-col gap-3 px-3 py-3 lg:px-4">
@@ -90,7 +108,7 @@ export default function Home() {
           onClearCanvas={() => { if (!isWorkflowRunning) { setNodes([]); setEdges([]); } }}
           hasNodes={hasNodes}
           connectedTools={connectedTools}
-          onSaveTool={saveTool}
+          onSaveTool={handleSaveTool}
           validationIssues={validationIssues}
         />
 
@@ -129,7 +147,7 @@ export default function Home() {
                     onLogFilterChange={setSelectedLogFilter}
                     onFieldChange={handleFieldChange}
                     uploadedFiles={uploadedFiles}
-                    onFileUpload={(event) => setUploadedFiles(Array.from(event.target.files || []))}
+                    onFileUpload={handleFileUpload}
                     fileInputRef={fileInputRef}
                     onDeleteNode={handleDeleteSelectedNode}
                     onClose={() => setSelectedNodeId(null)}
