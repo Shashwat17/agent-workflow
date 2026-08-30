@@ -15,12 +15,12 @@ import {
   useWorkflowLogs,
   useWorkflowNodes,
 } from "@/hooks";
+import { notifyError, notifySuccess } from "@/lib/toast";
 
 export default function Home() {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [isWorkflowRunning, setIsWorkflowRunning] = useState(false);
-  const [notice, setNotice] = useState("");
   const fileInputRef = useRef(null);
   const [uploadFile] = useUploadFileMutation();
 
@@ -45,7 +45,9 @@ export default function Home() {
     selectedLogFilter,
     setSelectedLogFilter,
   } = useWorkflowLogs();
-  const { connectedTools, saveTool } = useToolIntegration(setNotice);
+  const { connectedTools, saveTool, testToolConnection } = useToolIntegration(
+    (message) => notifyError(message),
+  );
   const { history, pushHistory, popHistory } = useWorkflowHistory();
 
   const { handleWorkflowToggle: hookHandleWorkflowToggle, retryNode } =
@@ -58,7 +60,7 @@ export default function Home() {
       setIsWorkflowRunning,
       setSelectedNodeId,
       appendNodeLog,
-      setNotice,
+      notifyError,
     );
 
   const selectedNode = useMemo(
@@ -131,10 +133,9 @@ export default function Home() {
   const handleWorkflowToggle = useCallback(
     (nextState, startIndex = 0) => {
       if (nextState && blockingIssues.length) {
-        setNotice(blockingIssues[0].message);
+        notifyError(blockingIssues[0].message);
         return;
       }
-      setNotice("");
       hookHandleWorkflowToggle(nextState, hasNodes, startIndex);
     },
     [blockingIssues, hasNodes, hookHandleWorkflowToggle],
@@ -144,13 +145,30 @@ export default function Home() {
     async (tool) => {
       try {
         await saveTool(tool);
-        setNotice(`${tool.label} connected successfully.`);
+        notifySuccess(`${tool.label} connected successfully.`);
       } catch (error) {
-        setNotice(error?.message || "Could not connect tool.");
+        notifyError(error?.message || "Could not connect tool.");
         throw error;
       }
     },
     [saveTool],
+  );
+
+  const handleTestConnection = useCallback(
+    async (tool) => {
+      try {
+        const response = await testToolConnection(tool);
+        notifySuccess(
+          response?.message || `${tool.label || "Connection"} test succeeded.`,
+        );
+        return response;
+      } catch (error) {
+        const message = error?.message || "Could not test connection.";
+        notifyError(message);
+        throw error;
+      }
+    },
+    [testToolConnection],
   );
 
   const handleFileUpload = useCallback(
@@ -168,13 +186,13 @@ export default function Home() {
           "skills",
           uploaded.map((file) => file.fileId),
         );
-        setNotice(
-          uploaded.length
-            ? `${uploaded.length} skill file${uploaded.length === 1 ? "" : "s"} uploaded.`
-            : "",
-        );
+        if (uploaded.length) {
+          notifySuccess(
+            `${uploaded.length} skill file${uploaded.length === 1 ? "" : "s"} uploaded.`,
+          );
+        }
       } catch (error) {
-        setNotice(error?.message || "Could not upload skill file.");
+        notifyError(error?.message || "Could not upload skill file.");
       }
     },
     [selectedNodeId, updateSelectedNodeField, uploadFile],
@@ -195,26 +213,9 @@ export default function Home() {
           hasNodes={hasNodes}
           connectedTools={connectedTools}
           onSaveTool={handleSaveTool}
+          onTestConnection={handleTestConnection}
           validationIssues={validationIssues}
         />
-
-        {(notice || validationIssues.length > 0) && (
-          <div className="flex flex-wrap gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            {notice && <span>{notice}</span>}
-            {!notice &&
-              validationIssues.slice(0, 3).map((issue, index) => (
-                <button
-                  type="button"
-                  key={`${issue.message}-${index}`}
-                  onClick={() =>
-                    issue.nodeId && setSelectedNodeId(issue.nodeId)
-                  }
-                >
-                  {issue.message}
-                </button>
-              ))}
-          </div>
-        )}
 
         <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[300px_minmax(0,1fr)]">
           <div className="min-h-0 overflow-y-auto">

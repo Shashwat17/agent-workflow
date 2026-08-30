@@ -10,6 +10,7 @@ export function WorkflowHeader({
   hasNodes,
   connectedTools = [],
   onSaveTool,
+  onTestConnection,
   validationIssues = [],
 }) {
   const [integrationOpen, setIntegrationOpen] = useState(false);
@@ -80,13 +81,16 @@ export function WorkflowHeader({
           >
             Stop workflow
           </Button>
-
         </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2 px-1">
-        <span className={`ml-auto rounded-full px-3 py-1 text-xs font-medium ${validationIssues.some((issue) => issue.type === "error") ? "bg-rose-50 text-rose-700" : validationIssues.length ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
-          {validationIssues.length ? `${validationIssues.length} validation issue${validationIssues.length === 1 ? "" : "s"}` : "Workflow valid"}
+        <span
+          className={`ml-auto rounded-full px-3 py-1 text-xs font-medium ${validationIssues.some((issue) => issue.type === "error") ? "bg-rose-50 text-rose-700" : validationIssues.length ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}
+        >
+          {validationIssues.length
+            ? `${validationIssues.length} validation issue${validationIssues.length === 1 ? "" : "s"}`
+            : "Workflow valid"}
         </span>
       </div>
 
@@ -95,6 +99,7 @@ export function WorkflowHeader({
         onOpenChange={setIntegrationOpen}
         existingTools={connectedTools}
         onSaveTool={onSaveTool}
+        onTestConnection={onTestConnection}
       />
     </>
   );

@@ -3,11 +3,13 @@ import {
   useGetConnectionsQuery,
   useRemoveConnectionMutation,
   useSaveConnectionMutation,
+  useTestConnectionMutation,
 } from "@/lib/store/api-slice";
 
 export function useToolIntegration(onError) {
   const { data, error } = useGetConnectionsQuery();
   const [saveConnection] = useSaveConnectionMutation();
+  const [testConnection] = useTestConnectionMutation();
   const [removeConnection] = useRemoveConnectionMutation();
   const connectedTools = useMemo(
     () => data?.connections || [],
@@ -22,6 +24,10 @@ export function useToolIntegration(onError) {
     (tool) => saveConnection(tool).unwrap(),
     [saveConnection],
   );
+  const testToolConnection = useCallback(
+    (tool) => testConnection(tool).unwrap(),
+    [testConnection],
+  );
   const removeTool = useCallback(
     (toolId) => removeConnection(toolId).unwrap(),
     [removeConnection],
@@ -31,5 +37,5 @@ export function useToolIntegration(onError) {
     [connectedTools],
   );
 
-  return { connectedTools, saveTool, removeTool, getTool };
+  return { connectedTools, saveTool, testToolConnection, removeTool, getTool };
 }
