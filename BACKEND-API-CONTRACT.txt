@@ -1,0 +1,599 @@
+AGENT WORKFLOW BACKEND API CONTRACT
+==================================
+
+This document defines the contract expected by the frontend so the backend team can implement the APIs accurately.
+
+BASE URL
+--------
+Production or staging base URL should follow:
+
+https://api.example.test/api/v1
+
+If the application is running locally in the same domain, the backend may also expose these under:
+
+/api/v1
+
+HTTP standard:
+- JSON API responses: Content-Type: application/json
+- SSE stream: Content-Type: text/event-stream
+
+COMMON RESPONSE FORMAT
+----------------------
+Success:
+{
+  "success": true,
+  "data": { ... }
+}
+
+Error:
+{
+  "success": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human readable message",
+    "requestId": "req_123456",
+    "details": []
+  }
+}
+
+COMMON REQUEST/RESPONSE TYPES
+-----------------------------
+Node example:
+{
+  "id": "business-analyst-1",
+  "type": "agentNode",
+  "position": { "x": 200, "y": 120 },
+  "data": {
+    "agentType": "business-analyst",
+    "label": "Business Analyst",
+    "prompt": "Analyze the requirements and identify risks.",
+    "description": "Business analysis agent",
+    "skills": ["skill-file-123"]
+  }
+}
+
+Boundary node example:
+{
+  "id": "workflow-start-1",
+  "type": "boundaryNode",
+  "data": {
+    "nodeKind": "start",
+    "label": "Start"
+  }
+}
+
+Edge example:
+{
+  "id": "edge-1",
+  "source": "business-analyst-1",
+  "target": "devforce-1",
+  "sourceHandle": null,
+  "targetHandle": null
+}
+
+1) GET /agents
+--------------
+Purpose:
+List available agent templates.
+
+Request:
+No body.
+
+Response:
+{
+  "success": true,
+  "data": {
+    "agents": [
+      {
+        "id": "business-analyst",
+        "name": "Business Analyst",
+        "description": "Collects signals, requirements, and context.",
+        "accent": "#67e8f9",
+        "defaultPrompt": "Analyze the business context.",
+        "stages": []
+      },
+      {
+        "id": "devforce",
+        "name": "DevForce",
+        "description": "Executes a multi-step engineering workflow.",
+        "accent": "#86efac",
+        "defaultPrompt": "Execute the assigned engineering workflow.",
+        "stages": [
+          { "id": "requirements", "name": "Requirements intake and scope validation", "order": 1 },
+          { "id": "design", "name": "Design review and dependency mapping", "order": 2 },
+          { "id": "implementation", "name": "Code and configuration generation", "order": 4 }
+        ]
+      }
+    ]
+  }
+}
+
+2) POST /workflows/validate
+---------------------------
+Purpose:
+Validate graph before starting execution.
+
+Request body:
+{
+  "nodes": [
+    {
+      "id": "business-analyst-1",
+      "type": "agentNode",
+      "data": {
+        "agentType": "business-analyst",
+        "label": "Business Analyst",
+        "prompt": "Analyze requirements."
+      }
+    },
+    {
+      "id": "devforce-1",
+      "type": "agentNode",
+      "data": {
+        "agentType": "devforce",
+        "label": "DevForce",
+        "prompt": "Implement the approved requirements."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "source": "business-analyst-1",
+      "target": "devforce-1"
+    }
+  ]
+}
+
+Success response:
+{
+  "success": true,
+  "data": {
+    "valid": true,
+    "issues": [],
+    "executionOrder": ["business-analyst-1", "devforce-1"]
+  }
+}
+
+Failure response:
+{
+  "success": true,
+  "data": {
+    "valid": false,
+    "issues": [
+      {
+        "severity": "error",
+        "code": "CIRCULAR_DEPENDENCY",
+        "message": "Circular connections are not supported.",
+        "nodeIds": ["business-analyst-1", "devforce-1"]
+      }
+    ],
+    "executionOrder": []
+  }
+}
+
+Validation rules expected by frontend:
+- At least one node is required.
+- Each node must use a supported agent type.
+- Prompt must be non-empty.
+- Source/target nodes in every edge must exist.
+- No duplicate edges.
+- No self-references.
+- No circular dependencies.
+- Exactly one Start and one End boundary node required.
+- Start node cannot have incoming edges.
+- End node cannot have outgoing edges.
+- Every execution node must be reachable from Start and must reach End.
+
+3) POST /runs
+-------------
+Purpose:
+Start a workflow run.
+
+Request body:
+{
+  "clientRunId": "client-run-1724931000000",
+  "startNodeId": null,
+  "nodes": [
+    {
+      "id": "business-analyst-1",
+      "type": "agentNode",
+      "data": {
+        "agentType": "business-analyst",
+        "label": "Business Analyst",
+        "prompt": "Analyze the supplied requirements.",
+        "skills": []
+      }
+    },
+    {
+      "id": "workflow-start-1",
+      "type": "boundaryNode",
+      "data": {
+        "nodeKind": "start",
+        "label": "Start"
+      }
+    },
+    {
+      "id": "workflow-end-1",
+      "type": "boundaryNode",
+      "data": {
+        "nodeKind": "end",
+        "label": "End"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "source": "workflow-start-1",
+      "target": "business-analyst-1"
+    },
+    {
+      "id": "edge-2",
+      "source": "business-analyst-1",
+      "target": "workflow-end-1"
+    }
+  ],
+  "integrations": ["jira", "azure"],
+  "metadata": {
+    "timezone": "Asia/Kolkata",
+    "clientVersion": "1.0.0"
+  }
+}
+
+Success response (202 Accepted):
+{
+  "success": true,
+  "data": {
+    "runId": "run_abc123",
+    "status": "queued",
+    "createdAt": "2026-08-30T12:00:00.000Z",
+    "executionOrder": ["business-analyst-1"],
+    "eventsUrl": "/runs/run_abc123/events",
+    "statusUrl": "/runs/run_abc123"
+  }
+}
+
+4) GET /runs/:runId
+-------------------
+Purpose:
+Fetch current status of a run.
+
+Request:
+No body.
+
+Success response:
+{
+  "success": true,
+  "data": {
+    "runId": "run_abc123",
+    "status": "running",
+    "createdAt": "2026-08-30T12:00:00.000Z",
+    "nodes": [
+      {
+        "id": "business-analyst-1",
+        "status": "Completed"
+      }
+    ],
+    "startNode": {
+      "id": "workflow-start-1",
+      "type": "boundaryNode"
+    },
+    "endNode": {
+      "id": "workflow-end-1",
+      "type": "boundaryNode"
+    },
+    "edges": [
+      { "id": "edge-1", "source": "workflow-start-1", "target": "business-analyst-1" }
+    ],
+    "stopped": false
+  }
+}
+
+Error response:
+{
+  "success": false,
+  "error": {
+    "code": "RUN_NOT_FOUND",
+    "message": "Run was not found.",
+    "requestId": "req_123456"
+  }
+}
+
+5) POST /runs/:runId/stop
+-------------------------
+Purpose:
+Stop a running workflow.
+
+Request body:
+{
+  "reason": "Stopped by user"
+}
+
+Success response (202 Accepted):
+{
+  "success": true,
+  "data": {
+    "runId": "run_abc123",
+    "status": "stopping",
+    "requestedAt": "2026-08-30T12:00:00.000Z"
+  }
+}
+
+6) POST /runs/:runId/nodes/:nodeId/retry
+----------------------------------------
+Purpose:
+Retry a failed or selected node.
+
+Request body:
+{
+  "includeDownstream": true
+}
+
+Success response (202 Accepted):
+{
+  "success": true,
+  "data": {
+    "runId": "run_abc123",
+    "nodeId": "devforce-1",
+    "attempt": 2,
+    "status": "queued",
+    "queuedDownstreamNodeIds": []
+  }
+}
+
+7) POST /files
+--------------
+Purpose:
+Upload a skill file associated with a workflow node.
+
+Request:
+FormData multipart upload with field name "file".
+
+Optional metadata can be sent in request if needed:
+- nodeId
+
+Success response (201 Created):
+{
+  "success": true,
+  "data": {
+    "fileId": "file_123",
+    "name": "skill-file.md",
+    "mimeType": "text/markdown",
+    "size": 1024,
+    "status": "ready",
+    "createdAt": "2026-08-30T12:00:00.000Z"
+  }
+}
+
+8) DELETE /files/:fileId
+------------------------
+Purpose:
+Delete a previously uploaded skill file.
+
+Request:
+No body.
+
+Success response:
+{
+  "success": true,
+  "data": {
+    "fileId": "file_123",
+    "deleted": true
+  }
+}
+
+9) GET /integrations
+--------------------
+Purpose:
+List available external tool integrations.
+
+Request:
+No body.
+
+Success response:
+{
+  "success": true,
+  "data": {
+    "integrations": [
+      {
+        "id": "jira",
+        "name": "Jira",
+        "status": "available",
+        "authenticationType": "token"
+      },
+      {
+        "id": "azure",
+        "name": "Azure DevOps",
+        "status": "available",
+        "authenticationType": "token"
+      }
+    ]
+  }
+}
+
+10) GET /connections
+--------------------
+Purpose:
+Get connected tool/connector list.
+
+Request:
+No body.
+
+Success response:
+{
+  "success": true,
+  "data": {
+    "connections": [
+      {
+        "id": "jira",
+        "label": "Jira",
+        "shortLabel": "JIRA",
+        "status": "Connected",
+        "workspace": "Product Launch",
+        "url": "https://company.atlassian.net",
+        "email": "you@company.com",
+        "token": "***",
+        "project": "PROJ"
+      }
+    ]
+  }
+}
+
+11) POST /connections/test
+--------------------------
+Purpose:
+Verify a connection before saving it.
+
+Request body:
+{
+  "id": "jira",
+  "label": "Jira",
+  "shortLabel": "JIRA",
+  "workspace": "Product Launch",
+  "url": "https://company.atlassian.net",
+  "email": "you@company.com",
+  "token": "secret-token",
+  "project": "PROJ"
+}
+
+Success response:
+{
+  "success": true,
+  "data": {
+    "id": "jira",
+    "status": "connected",
+    "message": "Jira connection test succeeded."
+  }
+}
+
+12) POST /connections
+---------------------
+Purpose:
+Save a connection after successful validation.
+
+Request body:
+{
+  "id": "jira",
+  "label": "Jira",
+  "shortLabel": "JIRA",
+  "status": "Connected",
+  "workspace": "Product Launch",
+  "url": "https://company.atlassian.net",
+  "email": "you@company.com",
+  "token": "secret-token",
+  "project": "PROJ"
+}
+
+Success response (201 Created):
+{
+  "success": true,
+  "data": {
+    "id": "jira",
+    "label": "Jira",
+    "shortLabel": "JIRA",
+    "status": "Connected",
+    "workspace": "Product Launch",
+    "url": "https://company.atlassian.net",
+    "email": "you@company.com",
+    "project": "PROJ"
+  }
+}
+
+13) DELETE /connections/:connectionId
+-------------------------------------
+Purpose:
+Remove a saved connection.
+
+Request:
+No body.
+
+Success response:
+{
+  "success": true,
+  "data": {
+    "connectionId": "jira",
+    "deleted": true
+  }
+}
+
+SSE STREAM CONTRACT
+-------------------
+Purpose:
+Push real-time workflow execution status to the frontend.
+
+Event stream endpoint:
+GET /runs/:runId/events
+
+Response type:
+text/event-stream
+
+Event format:
+{
+  "type": "node.started",
+  "runId": "run_abc123",
+  "eventId": "evt_123",
+  "sequence": 1,
+  "timestamp": "2026-08-30T12:00:00.000Z",
+  "nodeId": "business-analyst-1",
+  "status": "running",
+  "attempt": 1,
+  "startedAt": "2026-08-30T12:00:01.000Z"
+}
+
+Supported event types:
+- stream.ready
+- run.queued
+- run.started
+- node.queued
+- node.started
+- stage.started
+- stage.completed
+- log
+- node.completed
+- node.failed
+- run.completed
+- run.failed
+- run.stopped
+- heartbeat
+
+Important frontend expectations:
+- Each event should be sent as an SSE event with JSON payload.
+- Events must include a unique eventId and monotonic sequence number.
+- Terminal events are expected to close the stream: run.completed, run.failed, run.stopped.
+- The client reconnects automatically if connection breaks.
+- If lastEventId is provided on reconnect, backend should continue from that point.
+
+Example SSE message:
+
+event: node.started
+id: evt_123
+retry: 1000
+
+data: {"type":"node.started","runId":"run_abc123","eventId":"evt_123","sequence":1,"timestamp":"2026-08-30T12:00:00.000Z","nodeId":"business-analyst-1","status":"running","attempt":1,"startedAt":"2026-08-30T12:00:00.500Z"}
+
+EDGE CASES AND ERROR HANDLING
+----------------------------
+The frontend expects these common error codes:
+- WORKFLOW_VALIDATION_FAILED
+- RUN_NOT_FOUND
+- MOCK_ROUTE_NOT_FOUND
+- INVALID_API_RESPONSE
+- INVALID_SSE_EVENT
+
+Always return a consistent error envelope with:
+- code
+- message
+- requestId
+- optional details[]
+
+SECURITY NOTES
+--------------
+- Tokens should never be returned in GET or list endpoints unless explicitly required.
+- In the current app, tokens are stripped before mock responses for test and save calls.
+- Real backend should store tokens securely and never expose them in plain-text responses.
+
+FINAL NOTES
+-----------
+- The frontend currently uses a mock adapter by default, but the contract above is the expected production-ready format.
+- The backend team can implement the APIs and stream in this shape without changing the frontend contract.
+- If the backend uses a different base path, the frontend can be updated through environment config using NEXT_PUBLIC_API_BASE_URL.
