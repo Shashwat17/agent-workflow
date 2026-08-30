@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   Background,
   MarkerType,
@@ -32,11 +32,13 @@ function WorkflowFlow({
   onDragOver,
   isWorkflowRunning,
 }) {
-  const { fitView } = useReactFlow();
+  const { fitView, screenToFlowPosition } = useReactFlow();
+  const hasInitializedView = useRef(false);
 
   useEffect(() => {
-    if (nodes.length > 0) {
+    if (nodes.length > 0 && !hasInitializedView.current) {
       fitView({ padding: 0.22, duration: 220 });
+      hasInitializedView.current = true;
     }
   }, [fitView, nodes.length]);
 
@@ -61,9 +63,16 @@ function WorkflowFlow({
       }}
       onDrop={(event) => {
         event.preventDefault();
-        if (!isWorkflowRunning) {
-          onDrop?.(event);
+        if (isWorkflowRunning) {
+          return;
         }
+
+        const flowPosition = screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+
+        onDrop?.(event, flowPosition);
       }}
     >
       <ReactFlow

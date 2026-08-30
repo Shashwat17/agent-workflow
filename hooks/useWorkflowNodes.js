@@ -8,18 +8,51 @@ export function useWorkflowNodes(isWorkflowRunning) {
 
   const hasNodes = nodes.length > 0;
 
-  const getAutoPosition = useCallback((nodeIndex) => {
-    const column = nodeIndex % 3;
-    const row = Math.floor(nodeIndex / 3);
+  const getAutoPosition = useCallback(
+    (flowPosition) => {
+      if (flowPosition) {
+        return flowPosition;
+      }
 
-    return {
-      x: 180 + column * 340,
-      y: 120 + row * 220,
-    };
-  }, []);
+      if (!nodes.length) {
+        return { x: 180, y: 120 };
+      }
+
+      const bounds = nodes.reduce(
+        (acc, node) => {
+          const x = node.position?.x ?? 0;
+          const y = node.position?.y ?? 0;
+          const width = 240;
+          const height = 120;
+
+          return {
+            minX: Math.min(acc.minX, x),
+            minY: Math.min(acc.minY, y),
+            maxX: Math.max(acc.maxX, x + width),
+            maxY: Math.max(acc.maxY, y + height),
+          };
+        },
+        {
+          minX: Number.POSITIVE_INFINITY,
+          minY: Number.POSITIVE_INFINITY,
+          maxX: Number.NEGATIVE_INFINITY,
+          maxY: Number.NEGATIVE_INFINITY,
+        },
+      );
+
+      const nextX = bounds.maxX + 220;
+      const nextY = Math.max(120, bounds.minY + 60);
+
+      return {
+        x: nextX,
+        y: nextY,
+      };
+    },
+    [nodes],
+  );
 
   const handleDrop = useCallback(
-    (event, selectedNodeId, setSelectedNodeId) => {
+    (event, selectedNodeId, setSelectedNodeId, flowPosition) => {
       event.preventDefault();
 
       if (isWorkflowRunning) {
@@ -42,8 +75,7 @@ export function useWorkflowNodes(isWorkflowRunning) {
         return;
       }
 
-      const nodeIndex = nodes.length;
-      const position = getAutoPosition(nodeIndex);
+      const position = getAutoPosition(flowPosition);
 
       const newNode = {
         id: `${template.id}-${Date.now()}`,
@@ -83,7 +115,8 @@ export function useWorkflowNodes(isWorkflowRunning) {
         sourceNode?.data?.nodeKind === "end" ||
         targetNode?.data?.nodeKind === "start";
       const duplicate = edges.some(
-        (edge) => edge.source === params.source && edge.target === params.target,
+        (edge) =>
+          edge.source === params.source && edge.target === params.target,
       );
       if (invalidBoundary || duplicate || params.source === params.target) {
         return;
@@ -154,10 +187,15 @@ export function useWorkflowNodes(isWorkflowRunning) {
         const targetNode = nodes.find((node) => node.id === edge.target);
         const sourceStatus = sourceNode?.data?.status;
         const targetStatus = targetNode?.data?.status;
-        const isProcessing =
-          sourceStatus === "Running" || targetStatus === "Running";
+        const targetKind = targetNode?.data?.nodeKind;
+        const hasNextAgent = !targetKind || targetKind !== "end";
+        const isCurrentActiveEdge =
+          sourceStatus === "Running" &&
+          hasNextAgent &&
+          targetStatus !== "Completed" &&
+          targetStatus !== "Failed";
         const isCompleted =
-          sourceStatus === "Completed" || targetStatus === "Completed";
+          sourceStatus === "Completed" && targetStatus === "Completed";
         const isFailed = sourceStatus === "Failed" || targetStatus === "Failed";
 
         return {
@@ -168,11 +206,11 @@ export function useWorkflowNodes(isWorkflowRunning) {
             ...edge.data,
             state: isFailed
               ? "failed"
-              : isProcessing
-              ? "processing"
-              : isCompleted
-                ? "completed"
-                : "idle",
+              : isCurrentActiveEdge
+                ? "processing"
+                : isCompleted
+                  ? "completed"
+                  : "idle",
           },
           markerEnd: {
             type: "arrowclosed",
